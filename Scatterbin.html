@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<body>
+			<center>
+				<button id="Normal">
+					<input name="updateButtonNormal" type="button" value="Normal Cognition" onclick="updateDataNormal()"/>
+				</button>
+				<button id="Impaired">
+					<input name="updateButtonImpaired" type="button" value="Impaired Not MCI" onclick="updateDataImpaired()"/>
+				</button>
+				<button id="MCI">
+					<input name="updateButtonMCI" type="button" value="Mild Cognitive Impairment" onclick="updateDataMCI()"/>
+				</button>
+				<button id="Dementia">
+					<input name="updateButtonDementia" type="button" value="Dementia" onclick="updateDataDementia()"/>
+				</button>
+			</center>
+	<head>
+		<title>My Data Viz </title>
+		<!<script src="http://d3js.org/d3.v3.min.js"  </script>
+		<link rel="stylesheet" type="text/css" href="stylesheet.css">
+		<script type="text/javascript" src="d3.v3.min.js"></script> 
+	</head>
+<script>
+var margin = {top: 20, right: 20, bottom: 30, left: 40},
+	width = 1300 - margin.left - margin.right,
+	height = 500 - margin.top - margin.bottom;
+
+var scatterplot = d3.select("body").append("svg")
+				.attr("width", width + margin.left + margin.right)
+				.attr("height", height + margin.top + margin.bottom)
+			.append("g")
+				.attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+			
+var x = d3.scale.linear().range([margin.left, width]);
+		
+var y = d3.scale.linear().range([height, margin.top -7]);
+		
+var opacity = d3.scale.linear().range([0,1]);	
+
+var xAxis = d3.svg.axis()
+			.scale(x).ticks(8)
+			.orient("top");
+
+var yAxis = d3.svg.axis()
+			.scale(y)
+			.orient("left");
+		
+var div = d3.select("body").append("div")   
+			.attr("class", "tooltip")               
+			.style("opacity", 0);
+
+		
+/***************************************
+//Data Driven Section Begin:
+**************************************/
+d3.csv("Data/d3datavis.csv", function(error, data) {
+					
+		  data.forEach(function(d) {
+			d.Age = +d.Age;
+			d.MMSE = +d.MMSE;
+			d.Count = +d.Count;
+			d.NACCUDSD = d.NACCUDSD;
+		  });
+
+		  x.domain(d3.extent(data, function(d) { return d.Age; })).nice();
+		  y.domain(d3.extent(data, function(d) { return d.MMSE; })).nice();
+		  console.log("Age Range:", d3.extent(data, function(d) { return d.Age; }));
+		  console.log("MMSE Range:", d3.extent(data, function(d) { return d.MMSE; }));
+
+		//SCATTERPLOT: Create the color scale: Heat-map style  
+		var color = d3.scale.pow().exponent(.01)  //Power scale is much more linear result for counts. Tested this in R
+			.domain([d3.min(data, function(d) {return d.Count;}), d3.round(d3.mean(data, function(d){return d.Count;})), d3.max(data, function(d){return d.Count;})])
+			.range(["#2c7bb6", "#ffffbf", "#d7191c"])
+			.interpolate(d3.interpolateHcl); //interpolate hcl improves color perception
+			
+			/*Horizontal Lines to help eye follow scatter*/
+			scatterplot.selectAll(".vline").data(d3.range(31)).enter()
+					.append("line")
+					.attr("y1", function (d) {
+					return y(d);
+				})
+					.attr("y2", function (d) {
+					return y(d);
+				})
+					.attr("x1", function (d) {
+					return 0;
+				})
+					.attr("x2", function (d) {
+					return width;
+				})
+					.style("stroke", "rgba(187,190,242,.6)");
+				
+		//Scatter Plot Point Construction from data
+			scatterplot.selectAll(".dot")
+				.data(data)
+				.enter().append("rect")
+				.filter(function(d) { return d.NACCUDSD == "Normal cognition"})    
+					.attr("class", "dot")
+					.attr("x", function(d) { return x(d.Age - .5); }) //translating boxes to center
+					.attr("y", function(d) { return y(d.MMSE + .5); }) //translating boxes to center
+					.attr("width", x(2) - x(1)) 
+					.attr("height", y(1) - y(2)) //reversed since flipped axis
+					.on("mouseover", function(d) { //Mouse Hover Feature
+						div.transition()        
+							.duration(400)      
+							.style("opacity", .9);      
+						div .html("Age: " + d.Age + "<br/>" + "Count " + d.Count)
+							.style("left", (d3.event.pageX - 70) + "px")     
+							.style("top", (d3.event.pageY - 14) + "px");    
+						})                  
+					.on("mouseout", function(d) {       
+						div.transition()        
+							.duration(500)      
+							.style("opacity", 0);
+						})
+					.style("fill", "steelblue")
+					.transition().duration(2000).style("fill",  function(d) {return color(d.Count);});
+
+		 //SCATTERPLOT: Append X-Axis with features and text
+		  scatterplot.append("g")
+				.attr("class", "x axis")
+				.attr("transform", "translate(0," + 4 + ")")
+				.call(xAxis)
+			.append("text")
+				.attr("class", "label")
+				.attr("x", width)
+				.attr("y", 20)
+				.attr("dy", ".71em")
+				.style("text-anchor", "end")
+				.text("NACCAGE");
+
+		//SCATTERPLOT: Append Y-axis with features and text
+		  scatterplot.append("g")
+				.attr("class", "y axis")
+				.call(yAxis)
+			.append("text")
+				.attr("class", "label")
+				.attr("transform", "rotate(-90)")
+				.attr("y", 6)
+				.attr("dy", ".71em")
+				.style("text-anchor", "end")
+				.text("MMSE Total Score")
+					
+		//SCATTERPLOT: Constructing a legend						
+		  var legend = scatterplot.selectAll(".legend")
+				  .data(color.domain())
+				.enter().append("g")
+				  .attr("class", "legend")
+				  .attr("transform", function(d, i) { return "translate(0," + i * 20 + ")"; });
+
+		  legend.append("circle")
+				  .attr("cx", width - 10)
+				  .attr("cy", height/2 + 57)
+				  //.attr("width", 18)
+				  //.attr("height", 18)
+				  .attr("r", 9)
+				  .style("fill", color);
+
+		  legend.append("text")
+				  .attr("x", width - 24)
+				  .attr("y", (height/2) + 59)
+				  .attr("dy", ".35em")
+				  .style("text-anchor", "end")
+				  .text(function(d) { return d; });
+				  
+
+				  });
+		  //Data driven section for SCATTERPLOT end
+
+/* ORIGINAL SCATTER END POINT 
+
+ BEGIN BUTTON CHANGES
+ 
+ */
+		  
+		  
+function updateDataDementia()
+	{
+		d3.selectAll("rect")
+       .remove();
+				
+d3.csv("Data/d3datavis.csv", function(error, data) {
+			
+  data.forEach(function(d) {
+    d.Age = +d.Age;
+	d.MMSE = +d.MMSE;
+	d.Count = +d.Count;
+	d.NACCUDSD = d.NACCUDSD;
+  });
+
+  x.domain(d3.extent(data, function(d) { return d.Age; })).nice();
+  y.domain(d3.extent(data, function(d) { return d.MMSE; })).nice();
+ 
+//SCATTERPLOT: Create the color scale: Heat-map style  
+var color = d3.scale.pow().exponent(.01)  //Power scale is much more linear result for counts. Tested this in R
+    .domain([d3.min(data, function(d) {return d.Count;}), d3.round(d3.mean(data, function(d){return d.Count;})), d3.max(data, function(d){return d.Count;})])
+	.range(["#2c7bb6", "#ffffbf", "#d7191c"])
+    .interpolate(d3.interpolateHcl); //interpolate hcl improves color perception
+	
+//Scatter Plot Point Construction from data
+	scatterplot.selectAll(".dot")
+		.data(data)
+		.enter().append("rect")
+		.filter(function(d) { return d.NACCUDSD == "Dementia"})  
+			.attr("class", "dot")
+			.attr("x", function(d) { return x(d.Age - .5); }) //translating boxes to center
+			.attr("y", function(d) { return y(d.MMSE + .5); }) //translating boxes to center
+			.attr("width", x(2) - x(1)) 
+			.attr("height", y(1) - y(2)) //reversed since flipped axis
+			.on("mouseover", function(d) { //Mouse Hover Feature
+				div.transition()        
+					.duration(400)      
+					.style("opacity", .9);      
+				div .html("Age: " + d.Age + "<br/>" + "Count " + d.Count)
+					.style("left", (d3.event.pageX - 70) + "px")     
+					.style("top", (d3.event.pageY - 14) + "px");    
+				})                  
+			.on("mouseout", function(d) {       
+				div.transition()        
+					.duration(500)      
+					.style("opacity", 0);
+				})
+			
+			.style("fill", "steelblue")
+			.transition().duration(2500).style("fill",  function(d) {return color(d.Count);});	  
+
+		  });
+		  //Data driven section for SCATTERPLOT end
+		  } //end dementia function
+		  
+		  
+		  
+function updateDataNormal()
+	{
+		d3.selectAll("rect")
+       .remove();
+					
+		d3.csv("Data/d3datavis.csv", function(error, data) {
+					
+		  data.forEach(function(d) {
+			d.Age = +d.Age;
+			d.MMSE = +d.MMSE;
+			d.Count = +d.Count;
+			d.NACCUDSD = d.NACCUDSD;
+		  });
+
+		  x.domain(d3.extent(data, function(d) { return d.Age; })).nice();
+		  y.domain(d3.extent(data, function(d) { return d.MMSE; })).nice();
+		  
+		//SCATTERPLOT: Create the color scale: Heat-map style  
+		var color = d3.scale.pow().exponent(.01)  //Power scale is much more linear result for counts. Tested this in R
+			.domain([d3.min(data, function(d) {return d.Count;}), d3.round(d3.mean(data, function(d){return d.Count;})), d3.max(data, function(d){return d.Count;})])
+			.range(["#2c7bb6", "#ffffbf", "#d7191c"])
+			.interpolate(d3.interpolateHcl); //interpolate hcl improves color perception
+				
+		//Scatter Plot Point Construction from data
+			scatterplot.selectAll(".dot")
+				.data(data)
+				.enter().append("rect")
+				.filter(function(d) { return d.NACCUDSD == "Normal cognition"})  
+					.attr("class", "dot")
+					.attr("x", function(d) { return x(d.Age - .5); }) //translating boxes to center
+					.attr("y", function(d) { return y(d.MMSE + .5); }) //translating boxes to center
+					.attr("width", x(2) - x(1)) 
+					.attr("height", y(1) - y(2)) //reversed since flipped axis
+					.on("mouseover", function(d) { //Mouse Hover Feature
+						div.transition()        
+							.duration(400)      
+							.style("opacity", .9);      
+						div .html("Age: " + d.Age + "<br/>" + "Count " + d.Count)
+							.style("left", (d3.event.pageX - 70) + "px")     
+							.style("top", (d3.event.pageY - 14) + "px");    
+						})                  
+					.on("mouseout", function(d) {       
+						div.transition()        
+							.duration(500)      
+							.style("opacity", 0);
+						})
+					.style("fill", "steelblue")
+					.transition().duration(2500).style("fill",  function(d) {return color(d.Count);});
+					
+				  });
+				  //Data driven section for SCATTERPLOT end
+
+				  } //end Normal function
+				  
+		  
+
+		  
+function updateDataImpaired()
+			{
+			d3.selectAll("rect")
+			   .remove();
+						
+			d3.csv("Data/d3datavis.csv", function(error, data) {
+					
+		  data.forEach(function(d) {
+			d.Age = +d.Age;
+			d.MMSE = +d.MMSE;
+			d.Count = +d.Count;
+			d.NACCUDSD = d.NACCUDSD;
+		  });
+
+		  x.domain(d3.extent(data, function(d) { return d.Age; })).nice();
+		  y.domain(d3.extent(data, function(d) { return d.MMSE; })).nice();
+
+		//SCATTERPLOT: Create the color scale: Heat-map style  
+		var color = d3.scale.pow().exponent(.01)  //Power scale is much more linear result for counts. Tested this in R
+			.domain([d3.min(data, function(d) {return d.Count;}), d3.round(d3.mean(data, function(d){return d.Count;})), d3.max(data, function(d){return d.Count;})])
+			.range(["#2c7bb6", "#ffffbf", "#d7191c"])
+			.interpolate(d3.interpolateHcl); //interpolate hcl improves color perception
+			
+		//Scatter Plot Point Construction from data
+			scatterplot.selectAll(".dot")
+				.data(data)
+				.enter().append("rect")
+				.filter(function(d) { return d.NACCUDSD == "Impaired not MCI"})  
+					.attr("class", "dot")
+					.attr("x", function(d) { return x(d.Age - .5); }) //translating boxes to center
+					.attr("y", function(d) { return y(d.MMSE + .5); }) //translating boxes to center
+					.attr("width", x(2) - x(1)) 
+					.attr("height", y(1) - y(2)) //reversed since flipped axis
+					.on("mouseover", function(d) { //Mouse Hover Feature
+						div.transition()        
+							.duration(400)      
+							.style("opacity", .9);      
+						div .html("Age: " + d.Age + "<br/>" + "Count " + d.Count)
+							.style("left", (d3.event.pageX - 70) + "px")     
+							.style("top", (d3.event.pageY - 14) + "px");    
+						})                  
+					.on("mouseout", function(d) {       
+						div.transition()        
+							.duration(500)      
+							.style("opacity", 0);
+						})
+					.style("fill", "steelblue")
+					.transition().duration(2500).style("fill",  function(d) {return color(d.Count);});
+					
+				  });
+				  //Data driven section for SCATTERPLOT end
+
+				  } //end IMPAIRED function
+				  
+		  
+function updateDataMCI()
+			{
+			d3.selectAll("rect")
+			   .remove();
+						
+		d3.csv("Data/d3datavis.csv", function(error, data) {
+					
+		  data.forEach(function(d) {
+			d.Age = +d.Age;
+			d.MMSE = +d.MMSE;
+			d.Count = +d.Count;
+			d.NACCUDSD = d.NACCUDSD;
+		  });
+
+		  x.domain(d3.extent(data, function(d) { return d.Age; })).nice();
+		  y.domain(d3.extent(data, function(d) { return d.MMSE; })).nice();
+
+		//SCATTERPLOT: Create the color scale: Heat-map style  
+		var color = d3.scale.pow().exponent(.01)  //Power scale is much more linear result for counts. Tested this in R
+			.domain([d3.min(data, function(d) {return d.Count;}), d3.round(d3.mean(data, function(d){return d.Count;})), d3.max(data, function(d){return d.Count;})])
+			.range(["#2c7bb6", "#ffffbf", "#d7191c"])
+			.interpolate(d3.interpolateHcl); //interpolate hcl improves color perception
+			
+		//Scatter Plot Point Construction from data
+			scatterplot.selectAll(".dot")
+				.data(data)
+				.enter().append("rect")
+				.filter(function(d) { return d.NACCUDSD == "MCI"})  
+					.attr("class", "dot")
+					.attr("x", function(d) { return x(d.Age - .5); }) //translating boxes to center
+					.attr("y", function(d) { return y(d.MMSE + .5); }) //translating boxes to center
+					.attr("width", x(2) - x(1)) 
+					.attr("height", y(1) - y(2)) //reversed since flipped axis
+					.on("mouseover", function(d) { //Mouse Hover Feature
+						div.transition()        
+							.duration(400)      
+							.style("opacity", .9);      
+						div .html("Age: " + d.Age + "<br/>" + "Count " + d.Count)
+							.style("left", (d3.event.pageX - 70) + "px")     
+							.style("top", (d3.event.pageY - 14) + "px");    
+						})                  
+					.on("mouseout", function(d) {       
+						div.transition()        
+							.duration(500)      
+							.style("opacity", 0);
+						})
+								.style("fill", "steelblue")
+					.transition().duration(2500).style("fill",  function(d) {return color(d.Count);});
+					
+				  });
+				  //Data driven section for SCATTERPLOT end
+
+				  } //end MCI function
+
+				  
+				  		  
+//Set Background Color
+d3.selectAll("body").style("background-color","whitesmoke")			
+		
+</script>
+</body>
+</html>
