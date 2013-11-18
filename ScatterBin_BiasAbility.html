@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<body>
+			<center>
+				<button id="Normal">
+					<input name="updateButtonNormal" type="button" value="Normal Cognition" onclick="updateDataNormal()"/>
+				</button>
+				<button id="Impaired">
+					<input name="updateButtonImpaired" type="button" value="Impaired Not MCI" onclick="updateDataImpaired()"/>
+				</button>
+				<button id="MCI">
+					<input name="updateButtonMCI" type="button" value="Mild Cognitive Impairment" onclick="updateDataMCI()"/>
+				</button>
+				<button id="Dementia">
+					<input name="updateButtonDementia" type="button" value="Dementia" onclick="updateDataDementia()"/>
+				</button>
+			</center>
+	<head>
+		<title>My Data Viz </title>
+		<!<script src="http://d3js.org/d3.v3.min.js"  </script>
+		<link rel="stylesheet" type="text/css" href="stylesheet.css">
+		<script type="text/javascript" src="d3.v3.min.js"></script> 
+	</head>
+<script>
+//Scatter plot vars
+var margin = {top: 25, right: 25, bottom: 30, left: 40},
+	width = 1300 - margin.left - margin.right,
+	height = 380 - margin.top - margin.bottom;
+
+var scatterplot = d3.select("body").append("svg")
+				.attr("width", width + margin.left + margin.right)
+				.attr("height", height + margin.top + margin.bottom)
+			.append("g")
+				.attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+			
+var x = d3.scale.linear().range([margin.left, width]);
+		
+var y = d3.scale.linear().range([height, margin.top -7]);
+		
+var opacity = d3.scale.linear().range([0,1]);	
+
+var xAxis = d3.svg.axis()
+			.scale(x).ticks(8)
+			.orient("top");
+
+var yAxis = d3.svg.axis()
+			.scale(y)
+			.orient("left");
+		
+var div = d3.select("body").append("div")   
+			.attr("class", "tooltip")               
+			.style("opacity", 0);
+			
+//Bubbles variables
+var y2 = d3.scale.linear()
+    .range([0,height/2.4]);
+var x2 = d3.scale.linear()
+	.range([margin.left, width]);
+
+var bubbles = d3.select("body").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height/2.4 + margin.top/2.4 + margin.bottom/2.4)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top/2.4 + ")");
+
+var divB = d3.select("body").append("div")   
+			.attr("class", "tooltip")               
+			.style("opacity", 0);	
+		
+/***************************************
+//Data Driven Section Begin:
+**************************************/
+d3.csv("Data/d3datavis.csv", function(error, data) {
+					
+		  data.forEach(function(d) {
+			d.Age = +d.Age;
+			d.MMSE = +d.MMSE;
+			d.Count = +d.Count;
+			d.NACCUDSD = d.NACCUDSD;
+		  });
+
+		  x.domain(d3.extent(data, function(d) { return d.Age; })).nice();
+		  y.domain(d3.extent(data, function(d) { return d.MMSE; })).nice();
+		  console.log("Age Range:", d3.extent(data, function(d) { return d.Age; }));
+		  console.log("MMSE Range:", d3.extent(data, function(d) { return d.MMSE; }));
+
+		//SCATTERPLOT: Create the color scale: Heat-map style  
+		var color = d3.scale.pow().exponent(.01)  //Power scale is much more linear result for counts. Tested this in R
+			.domain([d3.min(data, function(d) {return d.Count;}), d3.round(d3.mean(data, function(d){return d.Count;})), d3.max(data, function(d){return d.Count;})])
+			.range(["#2c7bb6", "#ffffbf", "#d7191c"])
+			.interpolate(d3.interpolateHcl); //interpolate hcl improves color perception
+			
+			/*Horizontal Lines to help eye follow scatter*/
+			scatterplot.selectAll(".vline").data(d3.range(31)).enter()
+					.append("line")
+					.attr("y1", function (d) {
+					return y(d);
+				})
+					.attr("y2", function (d) {
+					return y(d);
+				})
+					.attr("x1", function (d) {
+					return 0;
+				})
+					.attr("x2", function (d) {
+					return width;
+				})
+					.style("stroke", "rgba(187,190,242,.6)");
+	
+		//Scatter Plot Point Construction from data
+			scatterplot.selectAll(".dot")
+				.data(data)
+				.enter().append("rect")
+				.filter(function(d) { return d.NACCUDSD == "Normal cognition"})    
+					.attr("class", "dot")
+					.attr("id", function(d, i) { return "rect-" + i; }) //assigning id to each rectangle to access later for mousemovement
+					.attr("x", function(d) { return x(d.Age - .5); }) //translating boxes to center
+					.attr("y", function(d) { return y(d.MMSE + .5); }) //translating boxes to center
+					.attr("width", x(2) - x(1)) 
+					.attr("height", y(1) - y(2)) //reversed since flipped axis
+					.on("mouseover", NormalBubbles)                  
+					.on("mouseout", function(d) {       
+						div.transition()        
+							.duration(500)      
+							.style("opacity", 0);
+						})
+					.on("mousemove", mousehover)
+					.style("fill", "steelblue")
+					.transition().duration(2000).style("fill",  function(d) {return color(d.Count);});
+		
+		function mousehover(d) { //Mouse Hover Feature
+						div.transition()        
+							.duration(400)      
+							.style("opacity", .9);      
+						div .html("Age: " + d.Age + "<br/>" + "Count " + d.Count)
+							.style("left", (d3.event.pageX - 105) + "px")     
+							.style("top", (d3.event.pageY - 14) + "px");
+						}
+		
+		//SCATTERPLOT: Append X-Axis with features and text
+		  scatterplot.append("g")
+				.attr("class", "x axis")
+				.attr("transform", "translate(0," + 4 + ")")
+				.call(xAxis)
+			.append("text")
+				.attr("class", "label")
+				.attr("x", width)
+				.attr("y", 10)
+				.attr("dy", ".71em")
+				.style("text-anchor", "end")
+				.text("AGE");
+
+		//SCATTERPLOT: Append Y-axis with features and text
+		  scatterplot.append("g")
+				.attr("class", "y axis")
+				.call(yAxis)
+			.append("text")
+				.attr("class", "label")
+				.attr("transform", "rotate(-90)")
+				.attr("y", 6)
+				.attr("dy", ".71em")
+				.style("text-anchor", "end")
+				.text("MMSE")
+					
+		//SCATTERPLOT: Constructing a legend						
+		  var legend = scatterplot.selectAll(".legend")
+				  .data(color.domain())
+				.enter().append("g")
+				  .attr("class", "legend")
+				  .attr("transform", function(d, i) { return "translate(0," + i * 20 + ")"; });
+
+		  legend.append("ellipse")
+				  .attr("cx", width - 10)
+				  .attr("cy", height/2 + 57)
+				  //.attr("width", 18)
+				  //.attr("height", 18)
+				  .attr("rx", 9)
+				  .attr("ry", 9)
+				  .style("fill", color);
+
+		  legend.append("text")
+				  .attr("x", width - 24)
+				  .attr("y", (height/2) + 59)
+				  .attr("dy", ".35em")
+				  .style("text-anchor", "end")
+				  .text(function(d) { return d; });
+
+function NormalBubbles(d,i,myvar)
+	{
+		d3.selectAll("circle")
+       .remove();	
+		d3.selectAll("p")
+		.remove();
+		
+	//console.log(d.Age);
+	myvar = d.Age;
+	//console.log("Passing value: " + myvar + " to bubble chart.");
+	
+////////////////////////////////////////////////////////
+/////////   BUBBLES  SECTION   /////////////////////////
+////////////////////////////////////////////////////////
+			
+d3.csv("bubblechart.csv", function(error, data) {
+  
+   data.forEach(function(d) {
+		d.Count = +d.Count; //Variable ENTERED
+		d.MMSE = +d.MMSE; //Variable ENTERED
+		d.Age = +d.Age; //Var Entered
+		});
+ 
+    x2.domain([93,101]);
+    y2.domain([0,1]); 
+	
+ bubbles.selectAll(".dot")
+		.data(data)
+			.enter().append("circle")
+			.filter(function(d) { return d.NACCUDSD == "Normal cognition"})
+			.filter(function(d) { return d.Age == myvar}) 
+			.attr("class", "dot")
+			.attr("cx", function(d) { return x2(d.MMSE); })
+			.attr("cy", y2(.3))
+			.style("fill",  function(d) {return "rgba(0,0," + d.Count*10 + ",.2)";})
+			//.style("fill",  "steelblue")
+			.attr("r", function(d) { return 7*Math.sqrt(d.Count / 3.14159);})
+			.on("mouseover", function(d) { //Mouse Hover Feature
+						divB.transition()        
+							.duration(300)      
+							.style("opacity", .9);      
+						divB.html("" + d.NACCUDSD + "<br/>" + "Count: " + d.Count)
+							.style("left", (d3.event.pageX - 50) + "px")     
+			 				.style("top", (d3.event.pageY - 65) + "px");    	
+							})                  
+			.on("mouseout", function(d) {       
+						divB.transition()        
+							.duration(10000)      
+							.style("opacity", 0);
+						})
+
+			p = bubbles.append('g');
+				p.append("foreignObject")
+				 .attr("x", 0)
+				 .attr("y", 35)
+				 .attr("width", 400)  
+				 .attr("height", 100)
+				 .append("xhtml:div")
+				 .style("color", "steelblue")
+				 .append("p")
+				 .text(function(d){return "Missing MMSE";});
+				p.append("foreignObject")
+				 .attr("x", 50)
+				 .attr("y", 65)
+				 .attr("width", 400)  
+				 .attr("height", 100)
+				 .append("xhtml:div")
+				 .style("color", "steelblue")
+				 .append("p")
+				 .text(function(d){return "Age: " + myvar;});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(95) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Physical Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(96) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Cognitive Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(97) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Other Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(98) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Verbal Refusal";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(99) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Generic Missing";});
+				 
+			});  //Data driven section BUBBLES end		
+			};    //End Bubbles Dementia function
+			});  //Data driven section for SCATTERPLOT end
+		  
+/* ORIGINAL SCATTER END POINT 
+ BEGIN BUTTON CHANGES 
+ */
+		  
+		  
+function updateDataDementia()
+	{
+		d3.selectAll("rect")
+       .remove();
+	   d3.selectAll("circle")
+	   .remove();
+				
+d3.csv("Data/d3datavis.csv", function(error, data) {
+			
+  data.forEach(function(d) {
+    d.Age = +d.Age;
+	d.MMSE = +d.MMSE;
+	d.Count = +d.Count;
+	d.NACCUDSD = d.NACCUDSD;
+  });
+
+  x.domain(d3.extent(data, function(d) { return d.Age; })).nice();
+  y.domain(d3.extent(data, function(d) { return d.MMSE; })).nice();
+ 
+//SCATTERPLOT: Create the color scale: Heat-map style  
+var color = d3.scale.pow().exponent(.01)  //Power scale is much more linear result for counts. Tested this in R
+    .domain([d3.min(data, function(d) {return d.Count;}), d3.round(d3.mean(data, function(d){return d.Count;})), d3.max(data, function(d){return d.Count;})])
+	.range(["#2c7bb6", "#ffffbf", "#d7191c"])
+    .interpolate(d3.interpolateHcl); //interpolate hcl improves color perception
+	
+//Scatter Plot Point Construction from data
+	scatterplot.selectAll(".dot")
+		.data(data)
+		.enter().append("rect")
+		.filter(function(d) { return d.NACCUDSD == "Dementia"})  
+			.attr("class", "dot")
+			.attr("x", function(d) { return x(d.Age - .5); }) //translating boxes to center
+			.attr("y", function(d) { return y(d.MMSE + .5); }) //translating boxes to center
+			.attr("width", x(2) - x(1)) 
+			.attr("height", y(1) - y(2)) //reversed since flipped axis
+			.on("mouseover", DementiaBubbles)                  
+			.on("mouseout", function(d) {       
+					div.transition()        
+						.duration(500)      
+						.style("opacity", 0);
+						})
+			.on("mousemove", mousehover)
+			.style("fill", "steelblue")
+			.transition().duration(2000).style("fill",  function(d) {return color(d.Count);});
+		
+		function mousehover(d) { //Mouse Hover Feature
+						div.transition()        
+							.duration(400)      
+							.style("opacity", .9);      
+						div .html("Age: " + d.Age + "<br/>" + "Count " + d.Count)
+							.style("left", (d3.event.pageX - 105) + "px")     
+							.style("top", (d3.event.pageY - 14) + "px");
+						}
+		  
+		  
+function DementiaBubbles(d,i,myvar)
+	{
+		d3.selectAll("circle")
+       .remove();	
+		d3.selectAll("p")
+		.remove();
+		
+	myvar = d.Age;
+	//console.log("Passing value: " + myvar + " to bubble chart.");
+	
+////////////////////////////////////////////////////////
+/////////   BUBBLES  SECTION   /////////////////////////
+////////////////////////////////////////////////////////
+			
+d3.csv("bubblechart.csv", function(error, data) {
+  
+   data.forEach(function(d) {
+		d.Count = +d.Count; //Variable ENTERED
+		d.MMSE = +d.MMSE; //Variable ENTERED
+		d.Age = +d.Age; //Var Entered
+		});
+ 
+    x2.domain([93,101]);
+    y2.domain([0,1]); //Variable ENTERED
+	
+ bubbles.selectAll(".dot")
+		.data(data)
+			.enter().append("circle")
+			.filter(function(d) { return d.NACCUDSD == "Dementia"})
+			.filter(function(d) { return d.Age == myvar}) 
+			.attr("class", "dot")
+			.attr("cx", function(d) { return x2(d.MMSE); })
+			.attr("cy", y2(.3))
+			.style("fill",  function(d) {return "rgba(0,0," + d.Count*10 + ",.2)";})
+			.attr("r", function(d) { return 7*Math.sqrt(d.Count / 3.14159);}) //Math.sqrt()
+			.on("mouseover", function(d) { //Mouse Hover Feature
+						divB.transition()        
+							.duration(300)      
+							.style("opacity", .9);      
+						divB.html("" + d.NACCUDSD + "<br/>" + "Count: " + d.Count)
+							.style("left", (d3.event.pageX - 50) + "px")     
+			 				.style("top", (d3.event.pageY - 65) + "px");    	
+							})                  
+			.on("mouseout", function(d) {       
+						divB.transition()        
+							.duration(10000)      
+							.style("opacity", 0);
+						})
+			p = bubbles.append('g');
+				p.append("foreignObject")
+				 .attr("x", 0)
+				 .attr("y", 35)
+				 .attr("width", 400)  
+				 .attr("height", 100)
+				 .append("xhtml:div")
+				 .style("color", "steelblue")
+				 .append("p")
+				 .text(function(d){return "Missing MMSE";});
+				p.append("foreignObject")
+				 .attr("x", 50)
+				 .attr("y", 65)
+				 .attr("width", 400)  
+				 .attr("height", 100)
+				 .append("xhtml:div")
+				 .style("color", "steelblue")
+				 .append("p")
+				 .text(function(d){return "Age: " + myvar;});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(95) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Physical Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(96) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Cognitive Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(97) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Other Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(98) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Verbal Refusal";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(99) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Generic Missing";});
+
+						
+			});  //Data driven section BUBBLES end		
+			};    //End Bubbles Dementia function
+			});  //Data driven section for SCATTERPLOT end
+		  	} // end dementia function
+			
+function updateDataNormal()
+	{
+		d3.selectAll("rect")
+       .remove();
+		d3.selectAll("circle")
+		.remove();
+		
+		d3.csv("Data/d3datavis.csv", function(error, data) {
+					
+		  data.forEach(function(d) {
+			d.Age = +d.Age;
+			d.MMSE = +d.MMSE;
+			d.Count = +d.Count;
+			d.NACCUDSD = d.NACCUDSD;
+		  });
+
+		  x.domain(d3.extent(data, function(d) { return d.Age; })).nice();
+		  y.domain(d3.extent(data, function(d) { return d.MMSE; })).nice();
+		  
+		//SCATTERPLOT: Create the color scale: Heat-map style  
+		var color = d3.scale.pow().exponent(.01)  //Power scale is much more linear result for counts. Tested this in R
+			.domain([d3.min(data, function(d) {return d.Count;}), d3.round(d3.mean(data, function(d){return d.Count;})), d3.max(data, function(d){return d.Count;})])
+			.range(["#2c7bb6", "#ffffbf", "#d7191c"])
+			.interpolate(d3.interpolateHcl); //interpolate hcl improves color perception
+				
+		//Scatter Plot Point Construction from data
+			scatterplot.selectAll(".dot")
+				.data(data)
+				.enter().append("rect")
+				.filter(function(d) { return d.NACCUDSD == "Normal cognition"})  
+					.attr("class", "dot")
+					.attr("x", function(d) { return x(d.Age - .5); }) //translating boxes to center
+					.attr("y", function(d) { return y(d.MMSE + .5); }) //translating boxes to center
+					.attr("width", x(2) - x(1)) 
+					.attr("height", y(1) - y(2)) //reversed since flipped axis
+					.on("mouseover", NormalBubbles)                  
+					.on("mouseout", function(d) {       
+					div.transition()        
+						.duration(500)      
+						.style("opacity", 0);
+						})
+					.on("mousemove", mousehover)
+					.style("fill", "steelblue")
+					.transition().duration(2000).style("fill",  function(d) {return color(d.Count);});
+		
+		function mousehover(d) { //Mouse Hover Feature
+						div.transition()        
+							.duration(400)      
+							.style("opacity", .9);      
+						div .html("Age: " + d.Age + "<br/>" + "Count " + d.Count)
+							.style("left", (d3.event.pageX - 105) + "px")     
+							.style("top", (d3.event.pageY - 14) + "px");
+						}
+		  
+		  
+function NormalBubbles(d,i,myvar)
+	{
+		d3.selectAll("circle")
+       .remove();	
+	    d3.selectAll("p")
+		.remove();
+		
+	myvar = d.Age;
+	//console.log("Passing value: " + myvar + " to bubble chart.");
+	
+////////////////////////////////////////////////////////
+/////////   BUBBLES  SECTION   /////////////////////////
+////////////////////////////////////////////////////////
+			
+d3.csv("bubblechart.csv", function(error, data) {
+  
+   data.forEach(function(d) {
+		d.Count = +d.Count; //Variable ENTERED
+		d.MMSE = +d.MMSE; //Variable ENTERED
+		d.Age = +d.Age; //Var Entered
+		});
+ 
+    x2.domain([93,101]);
+    y2.domain([0,1]); //Variable ENTERED
+	
+ bubbles.selectAll(".dot")
+		.data(data)
+			.enter().append("circle")
+			.filter(function(d) { return d.NACCUDSD == "Normal cognition"})
+			.filter(function(d) { return d.Age == myvar}) 
+			.attr("class", "dot")
+			.attr("cx", function(d) { return x2(d.MMSE); })
+			.attr("cy", y2(.3))
+			.style("fill",  function(d) {return "rgba(0,0," + d.Count*10 + ",.2)";})
+			.attr("r", function(d) { return 7*Math.sqrt(d.Count / 3.14159);}) //Math.sqrt()
+			.on("mouseover", function(d) { //Mouse Hover Feature
+						divB.transition()        
+							.duration(300)      
+							.style("opacity", .9);      
+						divB.html("" + d.NACCUDSD + "<br/>" + "Count: " + d.Count)
+							.style("left", (d3.event.pageX - 50) + "px")     
+			 				.style("top", (d3.event.pageY - 65) + "px");    	
+							})                  
+			.on("mouseout", function(d) {       
+						divB.transition()        
+							.duration(10000)      
+							.style("opacity", 0);
+						})
+		p = bubbles.append('g');
+				p.append("foreignObject")
+				 .attr("x", 0)
+				 .attr("y", 35)
+				 .attr("width", 400)  
+				 .attr("height", 100)
+				 .append("xhtml:div")
+				 .style("color", "steelblue")
+				 .append("p")
+				 .text(function(d){return "Missing MMSE";});
+				p.append("foreignObject")
+				 .attr("x", 50)
+				 .attr("y", 65)
+				 .attr("width", 400)  
+				 .attr("height", 100)
+				 .append("xhtml:div")
+				 .style("color", "steelblue")
+				 .append("p")
+				 .text(function(d){return "Age: " + myvar;});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(95) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Physical Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(96) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Cognitive Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(97) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Other Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(98) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Verbal Refusal";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(99) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Generic Missing";});
+	
+			});  //Data driven section BUBBLES end		
+			};    //End Bubbles normal function
+			});  //Data driven section for SCATTERPLOT end
+		  	} // end normal function
+
+				  
+function updateDataImpaired()
+	{
+			d3.selectAll("rect")
+			   .remove();
+			d3.selectAll("circle")
+				.remove();
+				
+			d3.csv("Data/d3datavis.csv", function(error, data) {
+					
+		  data.forEach(function(d) {
+			d.Age = +d.Age;
+			d.MMSE = +d.MMSE;
+			d.Count = +d.Count;
+			d.NACCUDSD = d.NACCUDSD;
+		  });
+
+		  x.domain(d3.extent(data, function(d) { return d.Age; })).nice();
+		  y.domain(d3.extent(data, function(d) { return d.MMSE; })).nice();
+
+		//SCATTERPLOT: Create the color scale: Heat-map style  
+		var color = d3.scale.pow().exponent(.01)  //Power scale is much more linear result for counts. Tested this in R
+			.domain([d3.min(data, function(d) {return d.Count;}), d3.round(d3.mean(data, function(d){return d.Count;})), d3.max(data, function(d){return d.Count;})])
+			.range(["#2c7bb6", "#ffffbf", "#d7191c"])
+			.interpolate(d3.interpolateHcl); //interpolate hcl improves color perception
+			
+		//Scatter Plot Point Construction from data
+			scatterplot.selectAll(".dot")
+				.data(data)
+				.enter().append("rect")
+				.filter(function(d) { return d.NACCUDSD == "Impaired not MCI"})  
+					.attr("class", "dot")
+					.attr("x", function(d) { return x(d.Age - .5); }) //translating boxes to center
+					.attr("y", function(d) { return y(d.MMSE + .5); }) //translating boxes to center
+					.attr("width", x(2) - x(1)) 
+					.attr("height", y(1) - y(2)) //reversed since flipped axis
+					.on("mouseover", ImpairedBubbles)                  
+					.on("mouseout", function(d) {       
+					div.transition()        
+						.duration(500)      
+						.style("opacity", 0);
+						})
+					.on("mousemove", mousehover)
+					.style("fill", "steelblue")
+					.transition().duration(2000).style("fill",  function(d) {return color(d.Count);});
+		
+		function mousehover(d) { //Mouse Hover Feature
+						div.transition()        
+							.duration(400)      
+							.style("opacity", .9);      
+						div .html("Age: " + d.Age + "<br/>" + "Count " + d.Count)
+							.style("left", (d3.event.pageX - 105) + "px")     
+							.style("top", (d3.event.pageY - 14) + "px");
+						}
+		  
+		  
+function ImpairedBubbles(d,i,myvar)
+	{
+		d3.selectAll("circle")
+       .remove();	
+		d3.selectAll("p")
+		.remove();
+		
+	myvar = d.Age;
+	//console.log("Passing value: " + myvar + " to bubble chart.");
+	
+////////////////////////////////////////////////////////
+/////////   BUBBLES  SECTION   /////////////////////////
+////////////////////////////////////////////////////////
+			
+d3.csv("bubblechart.csv", function(error, data) {
+  
+   data.forEach(function(d) {
+		d.Count = +d.Count; //Variable ENTERED
+		d.MMSE = +d.MMSE; //Variable ENTERED
+		d.Age = +d.Age; //Var Entered
+		});
+ 
+    x2.domain([93,101]);
+    y2.domain([0,1]); //Variable ENTERED
+	
+ bubbles.selectAll(".dot")
+		.data(data)
+			.enter().append("circle")
+			.filter(function(d) { return d.NACCUDSD == "Impaired not MCI"})
+			.filter(function(d) { return d.Age == myvar}) 
+			.attr("class", "dot")
+			.attr("cx", function(d) { return x2(d.MMSE); })
+			.attr("cy", y2(.3))
+			.style("fill",  function(d) {return "rgba(0,0," + d.Count*10 + ",.2)";})
+			.attr("r", function(d) { return 7*Math.sqrt(d.Count / 3.14159);}) //Math.sqrt()
+			.on("mouseover", function(d) { //Mouse Hover Feature
+						divB.transition()        
+							.duration(300)      
+							.style("opacity", .9);      
+						divB.html("" + d.NACCUDSD + "<br/>" + "Count: " + d.Count)
+							.style("left", (d3.event.pageX - 50) + "px")     
+			 				.style("top", (d3.event.pageY - 65) + "px");    	
+							})                  
+			.on("mouseout", function(d) {       
+						divB.transition()        
+							.duration(10000)      
+							.style("opacity", 0);
+						})
+		p = bubbles.append('g');
+				p.append("foreignObject")
+				 .attr("x", 0)
+				 .attr("y", 35)
+				 .attr("width", 400)  
+				 .attr("height", 100)
+				 .append("xhtml:div")
+				 .style("color", "steelblue")
+				 .append("p")
+				 .text(function(d){return "Missing MMSE";});
+				p.append("foreignObject")
+				 .attr("x", 50)
+				 .attr("y", 65)
+				 .attr("width", 400)  
+				 .attr("height", 100)
+				 .append("xhtml:div")
+				 .style("color", "steelblue")
+				 .append("p")
+				 .text(function(d){return "Age: " + myvar;});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(95) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Physical Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(96) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Cognitive Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(97) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Other Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(98) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Verbal Refusal";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(99) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Generic Missing";});
+	
+			});  //Data driven section BUBBLES end		
+			};    //End Bubbles impaired function
+			});  //Data driven section for SCATTERPLOT end
+		  	} // end impaired function
+				  
+		  
+function updateDataMCI()
+	{
+			d3.selectAll("rect")
+			   .remove();
+			d3.selectAll("circle")
+				.remove();
+				
+		d3.csv("Data/d3datavis.csv", function(error, data) {
+					
+		  data.forEach(function(d) {
+			d.Age = +d.Age;
+			d.MMSE = +d.MMSE;
+			d.Count = +d.Count;
+			d.NACCUDSD = d.NACCUDSD;
+		  });
+
+		  x.domain(d3.extent(data, function(d) { return d.Age; })).nice();
+		  y.domain(d3.extent(data, function(d) { return d.MMSE; })).nice();
+
+		//SCATTERPLOT: Create the color scale: Heat-map style  
+		var color = d3.scale.pow().exponent(.01)  //Power scale is much more linear result for counts. Tested this in R
+			.domain([d3.min(data, function(d) {return d.Count;}), d3.round(d3.mean(data, function(d){return d.Count;})), d3.max(data, function(d){return d.Count;})])
+			.range(["#2c7bb6", "#ffffbf", "#d7191c"])
+			.interpolate(d3.interpolateHcl); //interpolate hcl improves color perception
+			
+		//Scatter Plot Point Construction from data
+			scatterplot.selectAll(".dot")
+				.data(data)
+				.enter().append("rect")
+				.filter(function(d) { return d.NACCUDSD == "MCI"})  
+					.attr("class", "dot")
+					.attr("x", function(d) { return x(d.Age - .5); }) //translating boxes to center
+					.attr("y", function(d) { return y(d.MMSE + .5); }) //translating boxes to center
+					.attr("width", x(2) - x(1)) 
+					.attr("height", y(1) - y(2)) //reversed since flipped axis
+					.on("mouseover", MCIBubbles)                  
+					.on("mouseout", function(d) {       
+					div.transition()        
+						.duration(500)      
+						.style("opacity", 0);
+						})
+					.on("mousemove", mousehover)
+					.style("fill", "steelblue")
+					.transition().duration(2000).style("fill",  function(d) {return color(d.Count);});
+		
+		function mousehover(d) { //Mouse Hover Feature
+						div.transition()        
+							.duration(400)      
+							.style("opacity", .9);      
+						div .html("Age: " + d.Age + "<br/>" + "Count " + d.Count)
+							.style("left", (d3.event.pageX - 105) + "px")     
+							.style("top", (d3.event.pageY - 14) + "px");
+						}
+		  
+		  
+function MCIBubbles(d,i,myvar)
+	{
+		d3.selectAll("circle")
+       .remove();	
+		d3.selectAll("p")
+		.remove();
+		
+	myvar = d.Age;
+	//console.log("Passing value: " + myvar + " to bubble chart.");
+	
+////////////////////////////////////////////////////////
+/////////   BUBBLES  SECTION   /////////////////////////
+////////////////////////////////////////////////////////
+			
+d3.csv("bubblechart.csv", function(error, data) {
+  
+   data.forEach(function(d) {
+		d.Count = +d.Count; //Variable ENTERED
+		d.MMSE = +d.MMSE; //Variable ENTERED
+		d.Age = +d.Age; //Var Entered
+		});
+ 
+    x2.domain([93,101]);
+    y2.domain([0,1]); //Variable ENTERED
+	
+ bubbles.selectAll(".dot")
+		.data(data)
+			.enter().append("circle")
+			.filter(function(d) { return d.NACCUDSD == "MCI"})
+			.filter(function(d) { return d.Age == myvar}) 
+			.attr("class", "dot")
+			.attr("cx", function(d) { return x2(d.MMSE); })
+			.attr("cy", y2(.3))
+			.style("fill",  function(d) {return "rgba(0,0," + d.Count*10 + ",.2)";})
+			.attr("r", function(d) { return 7*Math.sqrt(d.Count / 3.14159);}) //Math.sqrt()
+			.on("mouseover", function(d) { //Mouse Hover Feature
+						divB.transition()        
+							.duration(300)      
+							.style("opacity", .9);      
+						divB.html("" + d.NACCUDSD + "<br/>" + "Count: " + d.Count)
+							.style("left", (d3.event.pageX - 50) + "px")     
+			 				.style("top", (d3.event.pageY - 65) + "px");    	
+							})                  
+			.on("mouseout", function(d) {       
+						divB.transition()        
+							.duration(10000)      
+							.style("opacity", 0);
+						})
+		p = bubbles.append('g');
+				p.append("foreignObject")
+				 .attr("x", 0)
+				 .attr("y", 35)
+				 .attr("width", 400)  
+				 .attr("height", 100)
+				 .append("xhtml:div")
+				 .style("color", "steelblue")
+				 .append("p")
+				 .text(function(d){return "Missing MMSE";});
+				p.append("foreignObject")
+				 .attr("x", 50)
+				 .attr("y", 65)
+				 .attr("width", 400)  
+				 .attr("height", 100)
+				 .append("xhtml:div")
+				 .style("color", "steelblue")
+				 .append("p")
+				 .text(function(d){return "Age: " + myvar;});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(95) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Physical Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(96) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Cognitive Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(97) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Other Problem";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(98) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Verbal Refusal";});
+				p.append("foreignObject")
+				 .attr("x", function(d) { return x2(99) -50; })
+				 .attr("y", 105).attr("width", width).attr("height", height).append("xhtml:div")
+				 .style("color", "steelblue").style("font", "14px 'Verdana'").append("p")
+				 .text(function(d){return "Generic Missing";});
+	
+			});  //Data driven section BUBBLES end		
+			};    //End Bubbles MCI function
+			});  //Data driven section for SCATTERPLOT end
+		  	} // end MCI function
+
+				  
+//Set Background Color
+d3.selectAll("body").style("background-color","whitesmoke")
+
+		
+</script>
+</body>
+</html>
